@@ -398,3 +398,29 @@ class TestSelectorsAdvanced:
         assert paragraphs.first.text == "1"
         assert paragraphs.last.text == "3"
         assert paragraphs.length == 3
+
+
+class TestUndecodableContent:
+    """Bytes the declared encoding cannot decode must not poison the parsed tree"""
+
+    def test_undecodable_bytes_keep_text_access_working(self):
+        page = Selector(b"<p>\xff\xfe</p>")
+
+        # Before, every text access raised `UnicodeDecodeError` because libxml2 kept the
+        # undecodable bytes as they were.
+        assert page.css("p")[0].text == "\ufffd\ufffd"
+        assert page.get_all_text() == "\ufffd\ufffd"
+        assert isinstance(page.html_content, str)
+        assert page.body == b"<p>\xff\xfe</p>"
+
+    def test_decodable_bytes_are_untouched(self):
+        page = Selector("café".encode("iso-8859-1"), encoding="iso-8859-1")
+
+        assert page.get_all_text() == "café"
+        assert page.body == b"caf\xe9"
+
+    def test_none_encoding_keeps_libxml2_detection(self):
+        page = Selector(b"<p>caf\xe9</p>", encoding=None)
+
+        assert page.get_all_text() == "café"
+        assert page.encoding is None

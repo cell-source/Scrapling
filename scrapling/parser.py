@@ -144,6 +144,19 @@ class Selector(SelectorsGeneration):
                 body = content.strip().replace("\x00", "") or "<html/>"
             elif isinstance(content, bytes):
                 body = content.replace(b"\x00", b"")
+                if self.encoding:
+                    # `None` keeps libxml2's own charset detection, so it is left untouched.
+                    try:
+                        body.decode(self.encoding)
+                    except UnicodeDecodeError:
+                        # libxml2 keeps bytes it cannot decode as they are, which leaves the parsed
+                        # tree with text nodes that raise `UnicodeDecodeError` on every access.
+                        # Decoding them here keeps the tree usable, while the original bytes stay
+                        # available in `_raw_body`.
+                        body = body.decode(self.encoding, errors="replace")
+                    except LookupError:
+                        # Unknown encoding name (`charset=bogus`); hand the bytes to libxml2 as before.
+                        pass
             else:
                 raise TypeError(f"content argument must be str or bytes, got {type(content)}")
 
